@@ -294,16 +294,8 @@
      messagingSenderId: "...", appId: "..."
    };
    ============================================================ */
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyA1xZqzKQHeI9o7aZfsu33zgR1jXLk-zMg",
-  authDomain: "futarizure.firebaseapp.com",
-  databaseURL: "https://futarizure-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "futarizure",
-  storageBucket: "futarizure.firebasestorage.app",
-  messagingSenderId: "1012864431256",
-  appId: "1:1012864431256:web:5db63942aed385bb898ced",
-  measurementId: "G-XZBGKQDPVH"
-};
+const FIREBASE_CONFIG = null;
+
 // ---------- data ----------
 const PALETTE = ["#E85D75","#5B7DB1","#8A6BAE","#E0A048","#4FA08B","#C96FA8"];
 
@@ -512,20 +504,48 @@ function openAnswer(i){
 let db = null, myId = null, myRoom = null, roomRef = null, isHost = false;
 let oSelCat = null, oUsedThemes = {}, lastRoom = null, openedShown = {};
 
-function firebaseReady(){
+// 自分の席を覚えておく(アプリ切り替え・再起動後の自動復帰用)
+const SESSION_KEY = "futarizure_session";
+function saveSession(){ try{ localStorage.setItem(SESSION_KEY, JSON.stringify({room:myRoom, pid:myId})); }catch(e){} }
+function loadSession(){ try{ return JSON.parse(localStorage.getItem(SESSION_KEY)); }catch(e){ return null; } }
+function clearSession(){ try{ localStorage.removeItem(SESSION_KEY); }catch(e){} }
+
+function firebaseReadySilent(){
   if(db) return true;
-  if(!FIREBASE_CONFIG){
-    alert("オンライン対戦はまだ準備中です。\n(セットアップ手順書のSTEP1〜2を済ませると使えるようになります)");
-    return false;
-  }
+  if(!FIREBASE_CONFIG) return false;
   try{
     firebase.initializeApp(FIREBASE_CONFIG);
     db = firebase.database();
     return true;
-  }catch(e){
-    alert("接続設定にエラーがあります: " + e.message);
-    return false;
-  }
+  }catch(e){ return false; }
+}
+function firebaseReady(){
+  if(firebaseReadySilent()) return true;
+  alert("オンライン対戦はまだ準備中です。\n(セットアップ手順書のSTEP1〜2を済ませると使えるようになります)");
+  return false;
+}
+
+// 在席管理: 切断されても席は消さず「オフライン印」を付けるだけ
+function setupPresence(){
+  const meRef = roomRef.child("players/"+myId);
+  meRef.onDisconnect().update({connected:false});
+  meRef.update({connected:true});
+}
+
+// 前回の部屋に自動復帰(アプリを開き直したとき)
+async function resumeSession(){
+  const sess = loadSession();
+  if(!sess || !sess.room || !sess.pid) return false;
+  if(!firebaseReadySilent()) return false;
+  try{
+    const snap = await db.ref("rooms/"+sess.room+"/players/"+sess.pid).get();
+    if(!snap.exists()){ clearSession(); return false; }
+    myId = sess.pid; myRoom = sess.room;
+    roomRef = db.ref("rooms/"+sess.room);
+    setupPresence();
+    enterRoom();
+    return true;
+  }catch(e){ return false; }
 }
 
 function onlineEntry(){
@@ -554,9 +574,10 @@ async function createRoom(){
   roomRef = db.ref("rooms/"+code);
   await roomRef.set({
     state:"lobby", host:myId, roundNo:0, createdAt:Date.now(),
-    players:{ [myId]: {name, order:0} }
+    players:{ [myId]: {name, order:0, connected:true} }
   });
-  roomRef.child("players/"+myId).onDisconnect().remove();
+  setupPresence();
+  saveSession();
   enterRoom();
 }
 
@@ -568,14 +589,37 @@ async function joinRoom(){
   const snap = await db.ref("rooms/"+code).get();
   if(!snap.exists()){ alert("その合言葉の部屋が見つかりません"); return; }
   const room = snap.val();
-  const count = Object.keys(room.players||{}).length;
-  if(count>=6){ alert("この部屋は満員です(6人まで)"); return; }
-  if(room.state!=="lobby"){ alert("この部屋はゲーム中です。次のラウンドを待ってね"); return; }
-  myId = "p" + Math.random().toString(36).slice(2,9);
-  myRoom = code; isHost = false;
+  const ps = room.players || {};
+
+  // ① 本人の復帰: 以前この部屋にいた本人なら、ゲーム中でもそのまま同じ席に戻れる
+  const sess = loadSession();
+  if(sess && sess.room===code && ps[sess.pid]){
+    myId = sess.pid;
+  }else{
+    // ② 同じ名前でオフラインの席があれば、その席に復帰(端末やブラウザが変わった場合の救済)
+    const ghost = Object.keys(ps).find(pid=>ps[pid].name===name && ps[pid].connected===false);
+    if(ghost){
+      myId = ghost;
+    }else{
+      // ③ 新しい人の参加はロビー中のみ
+      if(room.state!=="lobby"){ alert("この部屋はゲーム中です。\n(さっきまで参加していた人は、同じ名前で入り直すと復帰できます)"); return; }
+      if(Object.keys(ps).length>=6){ alert("この部屋は満員です(6人まで)"); return; }
+      myId = "p" + Math.random().toString(36).slice(2,9);
+      myRoom = code;
+      roomRef = db.ref("rooms/"+code);
+      await roomRef.child("players/"+myId).set({name, order:Object.keys(ps).length, connected:true});
+      setupPresence();
+      saveSession();
+      enterRoom();
+      return;
+    }
+  }
+  // 復帰(①②)の共通処理
+  myRoom = code;
   roomRef = db.ref("rooms/"+code);
-  await roomRef.child("players/"+myId).set({name, order:count});
-  roomRef.child("players/"+myId).onDisconnect().remove();
+  await roomRef.child("players/"+myId).update({name, connected:true});
+  setupPresence();
+  saveSession();
   enterRoom();
 }
 
@@ -629,7 +673,7 @@ function renderLobby(room){
     const el = document.createElement("div");
     el.className = "member";
     el.innerHTML = `<span class="dot" style="background:${PALETTE[i%PALETTE.length]}"></span>${esc(p.name)}` +
-      `<span class="tag">${p.pid===room.host?"ホスト":""}${p.pid===myId?" (あなた)":""}</span>`;
+      `<span class="tag">${p.pid===room.host?"ホスト":""}${p.pid===myId?" (あなた)":""}${p.connected===false?" 📶通信待ち":""}</span>`;
     box.appendChild(el);
   });
   $("lobby-host").style.display = isHost ? "block":"none";
@@ -761,18 +805,27 @@ async function leaveRoom(){
 function cleanupRoom(){
   if(roomRef) roomRef.off();
   roomRef = null; myRoom = null; myId = null; isHost = false; lastRoom = null; openedShown = {};
+  clearSession();
 }
 
 // ---------- init ----------
 renderPlayers();
 renderCats("cat-list", ()=>selCat, v=>{selCat=v;}, "custom-box");
 
-// 招待リンク(?room=CODE)で開いたら、オンライン参加画面へ
-(function(){
+// アプリに戻ってきたら「オンライン」印を付け直す
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState==="visible" && roomRef && myId){
+    roomRef.child("players/"+myId).update({connected:true});
+  }
+});
+
+// 起動時: ①前回の部屋に自動復帰 → ②招待リンク(?room=CODE)なら参加画面へ
+(async function(){
+  if(await resumeSession()) return;
   const code = new URLSearchParams(location.search).get("room");
   if(code && FIREBASE_CONFIG){
     $("o-code").value = code.toUpperCase();
-    if(firebaseReady()) go("o-entry");
+    if(firebaseReadySilent()) go("o-entry");
   }
 })();
 
