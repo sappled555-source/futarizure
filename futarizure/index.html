@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#FFF9F4">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>ふたりズレ - 価値観すり合わせゲーム</title>
+<style>
+  :root{
+    --paper:#FFF9F4; --rose:#E85D75; --blue:#5B7DB1; --overlap:#8A6BAE;
+    --ink:#3A3340; --ink-soft:#7A7280; --card:#FFFFFF; --line:#EFE5DC;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{
+    font-family:"Hiragino Maru Gothic ProN","Hiragino Sans","Yu Gothic",-apple-system,sans-serif;
+    background:var(--paper);color:var(--ink);display:flex;justify-content:center;min-height:100vh;
+  }
+  #app{width:100%;max-width:430px;padding:24px 20px 48px;}
+  .screen{display:none;animation:fadein .35s ease;}
+  .screen.active{display:block;}
+  @keyframes fadein{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important;}}
+
+  .venn{position:relative;width:150px;height:96px;margin:0 auto 20px;}
+  .venn .c{position:absolute;top:0;width:96px;height:96px;border-radius:50%;mix-blend-mode:multiply;opacity:.82;}
+  .venn .c1{left:0;background:var(--rose);} .venn .c2{right:0;background:var(--blue);}
+  .venn.small{width:78px;height:50px;margin-bottom:14px;}
+  .venn.small .c{width:50px;height:50px;}
+
+  .eyebrow{font-size:12px;letter-spacing:.24em;color:var(--ink-soft);text-align:center;margin-bottom:8px;}
+  h1{font-size:34px;text-align:center;letter-spacing:.06em;}
+  h1 .zure{color:var(--overlap);}
+  .lead{font-size:14px;line-height:1.9;color:var(--ink-soft);text-align:center;margin:14px 0 26px;}
+  h2{font-size:20px;text-align:center;margin-bottom:6px;}
+  .sub{font-size:13px;color:var(--ink-soft);text-align:center;margin-bottom:20px;line-height:1.7;}
+
+  .btn{
+    display:block;width:100%;padding:16px;border:none;border-radius:999px;
+    font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;
+    background:linear-gradient(100deg,var(--rose),var(--overlap) 60%,var(--blue));
+    color:#fff;letter-spacing:.08em;box-shadow:0 6px 18px rgba(138,107,174,.28);
+    transition:transform .12s;
+  }
+  .btn:active{transform:scale(.97);}
+  .btn.ghost{background:none;color:var(--ink-soft);box-shadow:none;font-weight:500;font-size:14px;margin-top:10px;}
+  .btn:disabled{opacity:.4;box-shadow:none;}
+  .btn.secondary{background:var(--ink);box-shadow:0 6px 18px rgba(58,51,64,.22);}
+  .btn.outline{background:var(--card);color:var(--overlap);border:2px solid var(--overlap);box-shadow:none;}
+
+  .player-row{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+  .dot{width:14px;height:14px;border-radius:50%;flex-shrink:0;}
+  input[type=text], textarea{
+    flex:1;width:100%;padding:14px 16px;border:1.5px solid var(--line);border-radius:14px;
+    font-size:16px;font-family:inherit;background:var(--card);color:var(--ink);outline:none;
+  }
+  input[type=text]:focus, textarea:focus{border-color:var(--overlap);}
+  .row-del{border:none;background:none;color:var(--ink-soft);font-size:20px;cursor:pointer;padding:6px;}
+  .addbtn{display:block;margin:4px auto 24px;border:none;background:none;color:var(--overlap);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;}
+
+  .cats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+  .cat{
+    padding:18px 12px;border:1.5px solid var(--line);border-radius:16px;background:var(--card);
+    font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;color:var(--ink);transition:border-color .15s;
+  }
+  .cat .em{display:block;font-size:24px;margin-bottom:6px;}
+  .cat.sel{border-color:var(--overlap);background:#F5F0FA;}
+  .custom-box{margin-top:6px;display:none;}
+  .custom-box.show{display:block;}
+  .custom-box label{font-size:12px;color:var(--ink-soft);display:block;margin:10px 0 4px;}
+
+  .theme-card{
+    background:var(--card);border-radius:22px;padding:26px 22px;text-align:center;
+    box-shadow:0 10px 30px rgba(58,51,64,.08);margin-bottom:20px;border:1.5px solid var(--line);
+  }
+  .theme-cat{font-size:12px;letter-spacing:.2em;color:var(--overlap);font-weight:700;margin-bottom:10px;}
+  .theme-text{font-size:23px;font-weight:800;line-height:1.55;}
+
+  .pass-name{font-size:24px;font-weight:800;text-align:center;margin:6px 0 14px;}
+  textarea{resize:none;height:110px;line-height:1.7;}
+  .note{font-size:13px;color:var(--ink-soft);text-align:center;line-height:1.8;margin:14px 0;}
+
+  .ans-cards{display:flex;flex-direction:column;gap:12px;margin:18px 0 6px;}
+  .ans{
+    background:var(--card);border-radius:18px;padding:16px 18px;
+    border-left:6px solid;box-shadow:0 8px 24px rgba(58,51,64,.07);
+  }
+  .ans.closed{
+    cursor:pointer;background:#F5F0FA;border:1.5px dashed var(--overlap);
+    border-left:6px solid;user-select:none;-webkit-user-select:none;
+  }
+  .ans.closed:active{transform:scale(.98);}
+  .ans.open{animation:flip .45s ease;}
+  @keyframes flip{from{opacity:0;transform:rotateX(70deg);}to{opacity:1;transform:none;}}
+  .ans .who{font-size:12px;font-weight:700;letter-spacing:.1em;margin-bottom:6px;}
+  .ans .body{font-size:17px;font-weight:700;line-height:1.7;overflow-wrap:anywhere;}
+  .ans .body.closed-hint{color:var(--overlap);font-size:14px;font-weight:500;}
+
+  .talk{
+    background:var(--card);border-left:5px solid var(--overlap);border-radius:14px;
+    padding:18px;font-size:15px;line-height:1.9;margin:18px 0;box-shadow:0 6px 20px rgba(58,51,64,.06);
+  }
+  .talk .tlabel{font-size:12px;letter-spacing:.18em;color:var(--overlap);font-weight:700;display:block;margin-bottom:6px;}
+  .steps{font-size:14px;line-height:2.1;background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:16px 18px;margin-bottom:22px;}
+  .steps b{color:var(--overlap);}
+
+  /* online */
+  .roomcode{
+    font-size:40px;font-weight:800;letter-spacing:.3em;text-align:center;
+    background:var(--card);border:2px dashed var(--overlap);border-radius:18px;
+    padding:18px 10px 18px 18px;color:var(--overlap);margin:14px 0 8px;user-select:all;-webkit-user-select:all;
+  }
+  .member{
+    display:flex;align-items:center;gap:10px;background:var(--card);border:1.5px solid var(--line);
+    border-radius:14px;padding:12px 16px;margin-bottom:8px;font-weight:700;font-size:15px;
+  }
+  .member .tag{margin-left:auto;font-size:11px;color:var(--ink-soft);font-weight:500;}
+  .wait{font-size:14px;color:var(--ink-soft);text-align:center;line-height:2;margin:20px 0;}
+  .spin{display:inline-block;width:16px;height:16px;border:3px solid var(--line);border-top-color:var(--overlap);border-radius:50%;animation:spin 1s linear infinite;vertical-align:-3px;margin-right:8px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HOME -->
+  <section class="screen active" id="s-home">
+    <div style="height:4vh"></div>
+    <div class="venn"><div class="c c1"></div><div class="c c2"></div></div>
+    <p class="eyebrow">価値観すり合わせゲーム</p>
+    <h1>ふたり<span class="zure">ズレ</span></h1>
+    <p class="lead">同じお題に、それぞれこっそり回答。<br>カードをめくれば、意外な答えが待ってるかも。</p>
+    <button class="btn" onclick="go('s-players')">この端末で遊ぶ(パス回し)</button>
+    <button class="btn outline" style="margin-top:12px" onclick="onlineEntry()">オンラインで遊ぶ(離れた相手と)</button>
+    <div class="steps" style="margin-top:22px">
+      <b>あそびかた</b><br>
+      1. お題が出る(例:「一番記憶に残っているデートは?」)<br>
+      2. 1人ずつ<b>こっそり回答</b>を入力<br>
+      3. カードをタップして、<b>ひとりずつ答えをオープン</b><br>
+      4. 意外な答えから、話がふくらむ
+    </div>
+  </section>
+
+  <!-- ===== LOCAL MODE ===== -->
+  <section class="screen" id="s-players">
+    <div class="venn small"><div class="c c1"></div><div class="c c2"></div></div>
+    <h2>あそぶ人</h2>
+    <p class="sub">2〜6人まで。名前を入れてね</p>
+    <div id="player-list"></div>
+    <button class="addbtn" id="add-player" onclick="addPlayer()">+ 人を追加する</button>
+    <button class="btn" onclick="confirmPlayers()">つぎへ</button>
+    <button class="btn ghost" onclick="go('s-home')">もどる</button>
+  </section>
+
+  <section class="screen" id="s-cat">
+    <div class="venn small"><div class="c c1"></div><div class="c c2"></div></div>
+    <h2>お題のジャンル</h2>
+    <p class="sub">今日はどんな話をする?</p>
+    <div class="cats" id="cat-list"></div>
+    <div class="custom-box" id="custom-box">
+      <label>じぶんたちでお題をつくる</label>
+      <input type="text" id="custom-theme" placeholder="例: 一番記憶に残っているデート場所は?">
+    </div>
+    <div style="height:14px"></div>
+    <button class="btn" onclick="startRound()">お題を出す</button>
+    <button class="btn ghost" onclick="go('s-players')">もどる</button>
+  </section>
+
+  <section class="screen" id="s-theme">
+    <p class="eyebrow" style="margin-top:8px">きょうのお題</p>
+    <div class="theme-card">
+      <div class="theme-cat" id="t-cat"></div>
+      <div class="theme-text" id="t-text"></div>
+    </div>
+    <p class="note">これから1人ずつ、こっそり回答を入力します。<br>ほかの人は画面を見ないでね!</p>
+    <button class="btn" onclick="startPass()">回答スタート</button>
+    <button class="btn ghost" onclick="startRound()">お題を変える</button>
+  </section>
+
+  <section class="screen" id="s-answer">
+    <p class="eyebrow" style="margin-top:8px">スマホをわたしてね</p>
+    <p class="pass-name" id="pass-name"></p>
+    <div class="theme-card" style="padding:18px;margin-bottom:16px;">
+      <div class="theme-text" id="a-theme" style="font-size:18px;"></div>
+    </div>
+    <textarea id="answer-input" maxlength="60" placeholder="ここに回答を入力(60文字まで)"></textarea>
+    <p class="note">入力したら「回答を隠す」を押して、次の人へ。</p>
+    <button class="btn" id="answer-next" onclick="submitAnswer()">回答を隠して次へ</button>
+  </section>
+
+  <section class="screen" id="s-reveal">
+    <p class="eyebrow" style="margin-top:8px">こたえあわせ</p>
+    <div class="theme-card" style="padding:16px;margin-bottom:4px;">
+      <div class="theme-text" id="r-theme" style="font-size:17px;"></div>
+    </div>
+    <p class="note" style="margin:10px 0 0;">カードをタップして、ひとりずつ答えをオープン!</p>
+    <div class="ans-cards" id="ans-cards"></div>
+    <div id="after-reveal" style="display:none">
+      <div class="talk"><span class="tlabel">もっと話してみよう</span><span id="j-talk"></span></div>
+      <button class="btn" onclick="startRound()">つぎのお題へ</button>
+      <button class="btn secondary" style="margin-top:10px" onclick="go('s-cat')">ジャンルを変える</button>
+      <button class="btn ghost" onclick="location.reload()">最初から</button>
+    </div>
+  </section>
+
+  <!-- ===== ONLINE MODE ===== -->
+  <section class="screen" id="o-entry">
+    <div class="venn small"><div class="c c1"></div><div class="c c2"></div></div>
+    <h2>オンラインで遊ぶ</h2>
+    <p class="sub">それぞれ自分のスマホで参加できます</p>
+    <label style="font-size:12px;color:var(--ink-soft);display:block;margin-bottom:4px;">あなたの名前</label>
+    <input type="text" id="o-name" maxlength="10" placeholder="例: ゆき">
+    <div style="height:18px"></div>
+    <button class="btn" onclick="createRoom()">部屋をつくる(ホスト)</button>
+    <div style="height:18px"></div>
+    <label style="font-size:12px;color:var(--ink-soft);display:block;margin-bottom:4px;">合言葉で参加する</label>
+    <input type="text" id="o-code" maxlength="4" placeholder="4文字の合言葉(例: AB12)" style="text-transform:uppercase;letter-spacing:.2em;">
+    <div style="height:10px"></div>
+    <button class="btn outline" onclick="joinRoom()">部屋に入る</button>
+    <button class="btn ghost" onclick="go('s-home')">もどる</button>
+  </section>
+
+  <section class="screen" id="o-lobby">
+    <p class="eyebrow" style="margin-top:8px">あいことば</p>
+    <div class="roomcode" id="lobby-code"></div>
+    <p class="sub">この合言葉か、招待リンクを相手に送ってね</p>
+    <button class="btn outline" onclick="shareRoom()" style="margin-bottom:20px">招待リンクをコピー/共有</button>
+    <h2 style="font-size:16px;text-align:left;margin-bottom:8px;">いまいる人</h2>
+    <div id="lobby-members"></div>
+    <div id="lobby-host" style="display:none">
+      <h2 style="font-size:16px;text-align:left;margin:18px 0 8px;">お題のジャンル</h2>
+      <div class="cats" id="o-cat-list"></div>
+      <div class="custom-box" id="o-custom-box">
+        <label>じぶんたちでお題をつくる</label>
+        <input type="text" id="o-custom-theme" placeholder="例: 一番記憶に残っているデート場所は?">
+      </div>
+      <div style="height:10px"></div>
+      <button class="btn" onclick="hostStart()">お題を出してスタート</button>
+    </div>
+    <div id="lobby-guest" class="wait" style="display:none"><span class="spin"></span>ホストがお題を選んでいます…</div>
+    <button class="btn ghost" onclick="leaveRoom()">部屋を出る</button>
+  </section>
+
+  <section class="screen" id="o-answer">
+    <p class="eyebrow" style="margin-top:8px">きょうのお題</p>
+    <div class="theme-card" style="padding:18px;margin-bottom:16px;">
+      <div class="theme-cat" id="oa-cat"></div>
+      <div class="theme-text" id="oa-theme" style="font-size:19px;"></div>
+    </div>
+    <div id="oa-form">
+      <textarea id="o-answer-input" maxlength="60" placeholder="ここに回答を入力(60文字まで)"></textarea>
+      <p class="note">送信すると変更できません。素直にどうぞ!</p>
+      <button class="btn" onclick="sendOnlineAnswer()">回答を送信</button>
+    </div>
+    <div id="oa-wait" class="wait" style="display:none"><span class="spin"></span>みんなの回答を待っています… <span id="oa-count"></span></div>
+    <button class="btn ghost" onclick="leaveRoom()">部屋を出る</button>
+  </section>
+
+  <section class="screen" id="o-reveal">
+    <p class="eyebrow" style="margin-top:8px">こたえあわせ</p>
+    <div class="theme-card" style="padding:16px;margin-bottom:4px;">
+      <div class="theme-text" id="or-theme" style="font-size:17px;"></div>
+    </div>
+    <p class="note" style="margin:10px 0 0;">カードをタップすると、全員の画面で同時にオープン!</p>
+    <div class="ans-cards" id="o-ans-cards"></div>
+    <div id="o-after" style="display:none">
+      <div class="talk"><span class="tlabel">もっと話してみよう</span><span id="o-talk"></span></div>
+      <div id="o-host-next" style="display:none">
+        <button class="btn" onclick="hostNext()">つぎのお題へ(同じジャンル)</button>
+        <button class="btn secondary" style="margin-top:10px" onclick="hostBackToLobby()">ジャンルを変える</button>
+      </div>
+      <div id="o-guest-next" class="wait" style="display:none"><span class="spin"></span>ホストの操作を待っています…</div>
+    </div>
+    <button class="btn ghost" onclick="leaveRoom()">部屋を出る</button>
+  </section>
+
+</div>
+
+<!-- Firebase (オンライン対戦用) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+"use strict";
+
+/* ============================================================
+   ★ セットアップ(手順書 STEP1 参照)
+   Firebaseコンソールからコピーした firebaseConfig を
+   下の null と置き換えて貼り付けてください。
+   例:
+   const FIREBASE_CONFIG = {
+     apiKey: "...", authDomain: "...", databaseURL: "...",
+     projectId: "...", storageBucket: "...",
+     messagingSenderId: "...", appId: "..."
+   };
+   ============================================================ */
+const FIREBASE_CONFIG = null;
+
+// ---------- data ----------
+const PALETTE = ["#E85D75","#5B7DB1","#8A6BAE","#E0A048","#4FA08B","#C96FA8"];
+
+const CATS = [
+  {id:"memory", em:"📸", name:"思い出", themes:[
+    "一番記憶に残っているデート場所は?",
+    "初めて会った日、相手の第一印象は?",
+    "ふたりで一番笑ったのはどんなとき?",
+    "もう一度行きたい「あの場所」は?",
+    "ふたりの思い出の食べものは?",
+    "今までで一番ドキッとした瞬間は?",
+  ], talks:[
+    "その思い出のどこが一番心に残ってる?お互いに聞いてみよう。",
+    "同じ時間を過ごしたのに、覚えている場面が違うのはなぜだろう?",
+    "その思い出、近いうちに「もう一度」やるならどんなプラン?",
+  ]},
+  {id:"money", em:"💰", name:"お金", themes:[
+    "臨時収入10万円、何に使う?",
+    "多少高くてもお金をかけたいものは?",
+    "正直「もったいない」と思う出費は?",
+    "ふたりの記念日、予算はいくらが理想?",
+    "貯金の目的、いま一番大きいものは?",
+  ], talks:[
+    "お金の使いどころ、お互いの答えのどこにその人らしさが出てた?",
+    "ふたりの家計で「これは聖域」と思うものをひとつずつ挙げるなら?",
+    "節約したいところ・したくないところ、正直に言い合ってみよう。",
+  ]},
+  {id:"life", em:"🏠", name:"暮らし", themes:[
+    "理想の休日の過ごし方は?",
+    "生活の中で絶対に譲れないこだわりは?",
+    "一番やりたくない家事は?",
+    "幸せだな〜と感じるのはどんな瞬間?",
+    "同居するなら絶対ほしい家のルールは?",
+  ], talks:[
+    "お互いのこだわり、ぶつかりそうなところと補い合えそうなところは?",
+    "相手の暮らしの習慣で「実は助かってる」ことをひとつ伝えよう。",
+    "ふたりの暮らしで、ちょっと変えてみたいことはある?",
+  ]},
+  {id:"future", em:"🧭", name:"将来", themes:[
+    "5年後、ふたりでしていたいことは?",
+    "いつか住んでみたい場所は?",
+    "ふたりでやってみたい大きな挑戦は?",
+    "おじいちゃん・おばあちゃんになったら何してたい?",
+    "来年の今ごろ、どうなっていたら最高?",
+  ], talks:[
+    "ふたりの答え、重なっている部分はどこだった?",
+    "一番近い夢、実現の「最初の一歩」を今ここで決めるなら?",
+    "相手の答えで「一緒に叶えたい」と思ったものは?",
+  ]},
+  {id:"heart", em:"💐", name:"気持ち", themes:[
+    "相手にされて一番うれしいことは?",
+    "最近「ありがとう」と思ったのはどんなとき?",
+    "相手のここが好き!というところは?",
+    "落ち込んだとき、どうしてもらえると助かる?",
+    "言われるとつい照れちゃう言葉は?",
+  ], talks:[
+    "お互いの答え、予想と合ってた?ズレてた?",
+    "その「うれしいこと」、これからもっと増やすには?",
+    "今日の答えの中で、一番グッときたひとことはどれ?",
+  ]},
+  {id:"custom", em:"✏️", name:"カスタム", themes:[], talks:[
+    "このお題を選んだ理由と、相手の答えで意外だったところを話してみよう。",
+  ]},
+];
+
+// ---------- helpers ----------
+const $ = id => document.getElementById(id);
+function go(id){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  $(id).classList.add("active");
+  window.scrollTo(0,0);
+}
+function esc(s){const d=document.createElement("div");d.textContent=s;return d.innerHTML;}
+function hashStr(s){let h=0;for(let i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))>>>0;}return h;}
+function catById(id){return CATS.find(x=>x.id===id);}
+
+/* ============================================================
+   LOCAL MODE(この端末でパス回し)
+   ============================================================ */
+let players = ["",""];
+let selCat = null;
+let usedThemes = {};
+let round = null;
+
+function renderPlayers(){
+  const list = $("player-list");
+  list.innerHTML = "";
+  players.forEach((p,i)=>{
+    const row = document.createElement("div");
+    row.className = "player-row";
+    row.innerHTML =
+      `<span class="dot" style="background:${PALETTE[i]}"></span>` +
+      `<input type="text" maxlength="10" placeholder="${i===0?"あなた(例: ゆき)":i===1?"パートナー(例: れん)":"なまえ"}" value="${esc(p)}" oninput="players[${i}]=this.value">` +
+      (players.length>2 ? `<button class="row-del" onclick="removePlayer(${i})">×</button>` : "");
+    list.appendChild(row);
+  });
+  $("add-player").style.display = players.length>=6 ? "none":"block";
+}
+function addPlayer(){ if(players.length<6){players.push(""); renderPlayers();} }
+function removePlayer(i){ players.splice(i,1); renderPlayers(); }
+function confirmPlayers(){
+  players = players.map((p,i)=> p.trim() || (players.length===2 ? (i===0?"あなた":"パートナー") : "プレイヤー"+(i+1)));
+  renderPlayers();
+  go("s-cat");
+}
+
+function renderCats(gridId, getSel, setSel, customBoxId){
+  const box = $(gridId);
+  box.innerHTML = "";
+  CATS.forEach(c=>{
+    const b = document.createElement("button");
+    b.className = "cat" + (getSel()===c.id?" sel":"");
+    b.innerHTML = `<span class="em">${c.em}</span>${c.name}`;
+    b.onclick = ()=>{ setSel(c.id); renderCats(gridId,getSel,setSel,customBoxId); };
+    box.appendChild(b);
+  });
+  $(customBoxId).className = "custom-box" + (getSel()==="custom"?" show":"");
+}
+
+function pickThemeLocal(){
+  if(selCat==="custom"){
+    const t = $("custom-theme").value.trim();
+    if(!t){ alert("カスタムのお題を入力してね"); return null; }
+    return t;
+  }
+  const c = catById(selCat);
+  if(!usedThemes[selCat]) usedThemes[selCat] = [];
+  let pool = c.themes.map((_,i)=>i).filter(i=>!usedThemes[selCat].includes(i));
+  if(pool.length===0){ usedThemes[selCat]=[]; pool = c.themes.map((_,i)=>i); }
+  const idx = pool[Math.floor(Math.random()*pool.length)];
+  usedThemes[selCat].push(idx);
+  return c.themes[idx];
+}
+
+function startRound(){
+  if(!selCat){ alert("ジャンルを選んでね"); return; }
+  const theme = pickThemeLocal();
+  if(theme===null) return;
+  round = { catId:selCat, theme, answers:new Array(players.length).fill(""), passIdx:0 };
+  $("t-cat").textContent = catById(selCat).name;
+  $("t-text").textContent = theme;
+  go("s-theme");
+}
+
+function startPass(){ round.passIdx = 0; showAnswerScreen(); }
+function showAnswerScreen(){
+  const i = round.passIdx;
+  $("pass-name").textContent = players[i] + " さんの番";
+  $("pass-name").style.color = PALETTE[i];
+  $("a-theme").textContent = round.theme;
+  $("answer-input").value = "";
+  go("s-answer");
+}
+function submitAnswer(){
+  const v = $("answer-input").value.trim();
+  if(!v){ alert("回答を入力してね"); return; }
+  round.answers[round.passIdx] = v;
+  $("answer-input").value = "";
+  round.passIdx++;
+  if(round.passIdx < players.length){ showAnswerScreen(); }
+  else { buildReveal(); go("s-reveal"); }
+}
+
+function buildReveal(){
+  round.opened = new Array(players.length).fill(false);
+  $("r-theme").textContent = round.theme;
+  $("after-reveal").style.display = "none";
+  const box = $("ans-cards");
+  box.innerHTML = "";
+  players.forEach((p,i)=>{
+    const card = document.createElement("div");
+    card.className = "ans closed";
+    card.style.borderLeftColor = PALETTE[i];
+    card.id = "ans-"+i;
+    card.innerHTML =
+      `<div class="who" style="color:${PALETTE[i]}">${esc(p)}</div>` +
+      `<div class="body closed-hint">タップして答えをひらく</div>`;
+    card.onclick = ()=>openAnswer(i);
+    box.appendChild(card);
+  });
+}
+function openAnswer(i){
+  if(round.opened[i]) return;
+  round.opened[i] = true;
+  const card = $("ans-"+i);
+  card.classList.remove("closed");
+  card.classList.add("open");
+  card.querySelector(".body").className = "body";
+  card.querySelector(".body").textContent = round.answers[i];
+  card.onclick = null;
+  if(round.opened.every(Boolean)){
+    const c = catById(round.catId);
+    $("j-talk").textContent = c.talks[Math.floor(Math.random()*c.talks.length)];
+    $("after-reveal").style.display = "block";
+    window.scrollTo({top: document.body.scrollHeight, behavior:"smooth"});
+  }
+}
+
+/* ============================================================
+   ONLINE MODE(Firebase Realtime Database)
+   room構造: rooms/{CODE} = {
+     state: "lobby"|"play", host: pid, catId, catName, theme,
+     roundNo, players:{pid:{name,order}}, answers:{pid:text}, opened:{pid:true}
+   }
+   ============================================================ */
+let db = null, myId = null, myRoom = null, roomRef = null, isHost = false;
+let oSelCat = null, oUsedThemes = {}, lastRoom = null, openedShown = {};
+
+function firebaseReady(){
+  if(db) return true;
+  if(!FIREBASE_CONFIG){
+    alert("オンライン対戦はまだ準備中です。\n(セットアップ手順書のSTEP1〜2を済ませると使えるようになります)");
+    return false;
+  }
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.database();
+    return true;
+  }catch(e){
+    alert("接続設定にエラーがあります: " + e.message);
+    return false;
+  }
+}
+
+function onlineEntry(){
+  if(!firebaseReady()) return;
+  go("o-entry");
+}
+
+function myName(){
+  const v = $("o-name").value.trim();
+  if(!v){ alert("名前を入れてね"); return null; }
+  return v;
+}
+function genCode(){
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  let s = "";
+  for(let i=0;i<4;i++) s += chars[Math.floor(Math.random()*chars.length)];
+  return s;
+}
+
+async function createRoom(){
+  if(!firebaseReady()) return;
+  const name = myName(); if(!name) return;
+  const code = genCode();
+  myId = "p" + Math.random().toString(36).slice(2,9);
+  myRoom = code; isHost = true;
+  roomRef = db.ref("rooms/"+code);
+  await roomRef.set({
+    state:"lobby", host:myId, roundNo:0, createdAt:Date.now(),
+    players:{ [myId]: {name, order:0} }
+  });
+  roomRef.child("players/"+myId).onDisconnect().remove();
+  enterRoom();
+}
+
+async function joinRoom(){
+  if(!firebaseReady()) return;
+  const name = myName(); if(!name) return;
+  const code = $("o-code").value.trim().toUpperCase();
+  if(code.length!==4){ alert("4文字の合言葉を入れてね"); return; }
+  const snap = await db.ref("rooms/"+code).get();
+  if(!snap.exists()){ alert("その合言葉の部屋が見つかりません"); return; }
+  const room = snap.val();
+  const count = Object.keys(room.players||{}).length;
+  if(count>=6){ alert("この部屋は満員です(6人まで)"); return; }
+  if(room.state!=="lobby"){ alert("この部屋はゲーム中です。次のラウンドを待ってね"); return; }
+  myId = "p" + Math.random().toString(36).slice(2,9);
+  myRoom = code; isHost = false;
+  roomRef = db.ref("rooms/"+code);
+  await roomRef.child("players/"+myId).set({name, order:count});
+  roomRef.child("players/"+myId).onDisconnect().remove();
+  enterRoom();
+}
+
+function enterRoom(){
+  openedShown = {};
+  $("lobby-code").textContent = myRoom;
+  roomRef.on("value", (snap)=>{
+    const room = snap.val();
+    if(!room){ alert("部屋が閉じられました"); cleanupRoom(); go("s-home"); return; }
+    lastRoom = room;
+    renderRoom(room);
+  });
+  go("o-lobby");
+}
+
+function playersSorted(room){
+  const ps = room.players || {};
+  return Object.keys(ps).map(pid=>({pid, ...ps[pid]})).sort((a,b)=>a.order-b.order);
+}
+
+function renderRoom(room){
+  isHost = (room.host === myId);
+  if(room.state==="lobby"){
+    renderLobby(room);
+    if(!$("o-lobby").classList.contains("active")) go("o-lobby");
+    return;
+  }
+  // state === "play"
+  const list = playersSorted(room);
+  const answers = room.answers || {};
+  const myAnswered = !!answers[myId];
+  const allAnswered = list.length>=2 && list.every(p=>answers[p.pid]);
+  if(!allAnswered){
+    $("oa-cat").textContent = room.catName;
+    $("oa-theme").textContent = room.theme;
+    $("oa-form").style.display = myAnswered ? "none":"block";
+    $("oa-wait").style.display = myAnswered ? "block":"none";
+    $("oa-count").textContent = `(${Object.keys(answers).length} / ${list.length}人)`;
+    if(!$("o-answer").classList.contains("active")) go("o-answer");
+  }else{
+    renderOnlineReveal(room, list, answers);
+    if(!$("o-reveal").classList.contains("active")) go("o-reveal");
+  }
+}
+
+function renderLobby(room){
+  const list = playersSorted(room);
+  const box = $("lobby-members");
+  box.innerHTML = "";
+  list.forEach((p,i)=>{
+    const el = document.createElement("div");
+    el.className = "member";
+    el.innerHTML = `<span class="dot" style="background:${PALETTE[i%PALETTE.length]}"></span>${esc(p.name)}` +
+      `<span class="tag">${p.pid===room.host?"ホスト":""}${p.pid===myId?" (あなた)":""}</span>`;
+    box.appendChild(el);
+  });
+  $("lobby-host").style.display = isHost ? "block":"none";
+  $("lobby-guest").style.display = isHost ? "none":"block";
+  if(isHost){
+    renderCats("o-cat-list", ()=>oSelCat, v=>{oSelCat=v;}, "o-custom-box");
+  }
+}
+
+function pickThemeOnline(){
+  if(oSelCat==="custom"){
+    const t = $("o-custom-theme").value.trim();
+    if(!t){ alert("カスタムのお題を入力してね"); return null; }
+    return {theme:t, catName:"カスタム"};
+  }
+  const c = catById(oSelCat);
+  if(!oUsedThemes[oSelCat]) oUsedThemes[oSelCat] = [];
+  let pool = c.themes.map((_,i)=>i).filter(i=>!oUsedThemes[oSelCat].includes(i));
+  if(pool.length===0){ oUsedThemes[oSelCat]=[]; pool = c.themes.map((_,i)=>i); }
+  const idx = pool[Math.floor(Math.random()*pool.length)];
+  oUsedThemes[oSelCat].push(idx);
+  return {theme:c.themes[idx], catName:c.name};
+}
+
+function hostStart(){
+  if(!oSelCat){ alert("ジャンルを選んでね"); return; }
+  const picked = pickThemeOnline();
+  if(!picked) return;
+  openedShown = {};
+  roomRef.update({
+    state:"play", catId:oSelCat, catName:picked.catName, theme:picked.theme,
+    roundNo:(lastRoom?.roundNo||0)+1, answers:null, opened:null
+  });
+}
+function hostNext(){
+  if(oSelCat==="custom"){ hostBackToLobby(); return; }
+  const picked = pickThemeOnline();
+  if(!picked) return;
+  openedShown = {};
+  roomRef.update({
+    catName:picked.catName, theme:picked.theme,
+    roundNo:(lastRoom?.roundNo||0)+1, answers:null, opened:null
+  });
+}
+function hostBackToLobby(){
+  openedShown = {};
+  roomRef.update({state:"lobby", answers:null, opened:null});
+}
+
+function sendOnlineAnswer(){
+  const v = $("o-answer-input").value.trim();
+  if(!v){ alert("回答を入力してね"); return; }
+  if(v.length>60){ alert("60文字までにしてね"); return; }
+  roomRef.child("answers/"+myId).set(v);
+  $("o-answer-input").value = "";
+}
+
+function renderOnlineReveal(room, list, answers){
+  $("or-theme").textContent = room.theme;
+  const opened = room.opened || {};
+  const box = $("o-ans-cards");
+  // ラウンドが変わったら作り直し
+  if(box.dataset.round !== String(room.roundNo)){
+    box.innerHTML = "";
+    box.dataset.round = String(room.roundNo);
+    openedShown = {};
+  }
+  list.forEach((p,i)=>{
+    let card = document.getElementById("o-ans-"+p.pid);
+    if(!card){
+      card = document.createElement("div");
+      card.id = "o-ans-"+p.pid;
+      card.className = "ans closed";
+      card.style.borderLeftColor = PALETTE[i%PALETTE.length];
+      card.innerHTML =
+        `<div class="who" style="color:${PALETTE[i%PALETTE.length]}">${esc(p.name)}</div>` +
+        `<div class="body closed-hint">タップして答えをひらく</div>`;
+      card.onclick = ()=>{ roomRef.child("opened/"+p.pid).set(true); };
+      box.appendChild(card);
+    }
+    if(opened[p.pid] && !openedShown[p.pid]){
+      openedShown[p.pid] = true;
+      card.classList.remove("closed");
+      card.classList.add("open");
+      const body = card.querySelector(".body");
+      body.className = "body";
+      body.textContent = answers[p.pid] || "";
+      card.onclick = null;
+    }
+  });
+  const allOpen = list.every(p=>opened[p.pid]);
+  $("o-after").style.display = allOpen ? "block":"none";
+  if(allOpen){
+    const c = catById(room.catId) || catById("custom");
+    $("o-talk").textContent = c.talks[hashStr(room.theme + room.roundNo) % c.talks.length];
+    $("o-host-next").style.display = isHost ? "block":"none";
+    $("o-guest-next").style.display = isHost ? "none":"block";
+  }
+}
+
+function shareRoom(){
+  const url = location.origin + location.pathname + "?room=" + myRoom;
+  const text = "「ふたりズレ」に招待!\n合言葉: " + myRoom + "\n" + url;
+  if(navigator.share){
+    navigator.share({title:"ふたりズレ", text}).catch(()=>{});
+  }else if(navigator.clipboard){
+    navigator.clipboard.writeText(text).then(()=>alert("招待リンクをコピーしました!"));
+  }else{
+    prompt("このリンクを相手に送ってね", url);
+  }
+}
+
+async function leaveRoom(){
+  if(!roomRef) { go("s-home"); return; }
+  roomRef.off();
+  try{
+    await roomRef.child("players/"+myId).remove();
+    const snap = await roomRef.child("players").get();
+    if(!snap.exists()){ await roomRef.remove(); }        // 最後の1人なら部屋を削除
+    else if(isHost){                                      // ホスト引き継ぎ
+      const rest = snap.val();
+      const nextHost = Object.keys(rest).sort((a,b)=>rest[a].order-rest[b].order)[0];
+      await roomRef.child("host").set(nextHost);
+    }
+  }catch(e){ /* 通信断でも画面は戻す */ }
+  cleanupRoom();
+  go("s-home");
+}
+function cleanupRoom(){
+  if(roomRef) roomRef.off();
+  roomRef = null; myRoom = null; myId = null; isHost = false; lastRoom = null; openedShown = {};
+}
+
+// ---------- init ----------
+renderPlayers();
+renderCats("cat-list", ()=>selCat, v=>{selCat=v;}, "custom-box");
+
+// 招待リンク(?room=CODE)で開いたら、オンライン参加画面へ
+(function(){
+  const code = new URLSearchParams(location.search).get("room");
+  if(code && FIREBASE_CONFIG){
+    $("o-code").value = code.toUpperCase();
+    if(firebaseReady()) go("o-entry");
+  }
+})();
+
+// PWA: Service Worker登録
+if("serviceWorker" in navigator && (location.protocol==="https:" || location.hostname==="localhost")){
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
